@@ -162,111 +162,85 @@ export Id_Dir=$queryID
 export HOME_MEDSLIK=/work/opa/${userName}/OILSPILL_DA/out/${Id_Dir}
 export MEDSLIK=$HOME_MEDSLIK/witoil
 export NCARG_USRRESFILE=$HOME_MEDSLIK/.hluresfile
-export BASE_MEDSLIK_HOME=/work/opa/${userName}/witoil
+export BASE_MEDSLIK_HOME_SANIFS=/work/opa/${userName}/witoil-sanifs
+export BASE_MEDSLIK_HOME_MED=/work/opa/${userName}/witoil-med
+export BASE_MEDSLIK_DATA_SANIFS=/work/opa/witoil-dev/witoil-sanifs-DATA
+export BASE_MEDSLIK_DATA_MED=/work/opa/witoil-dev/witoil-med-DATA
 
 # Load modules
 echo "[$APPNAME] -- Loading modules"
 module load intel19.5/19.5.281 intel19.5/szip/2.1.1 intel19.5/hdf5/1.10.5 intel19.5/netcdf/C_4.7.2-F_4.5.2_CXX_4.3.1
 
 # Clean medslik home before starting
-echo "[$APPNAME] -- Looking for $HOME_MEDSLIK"
+echo "[$APPNAME] -- Creating for $HOME_MEDSLIK"
 if [ -d  $HOME_MEDSLIK ];then
   echo "[$APPNAME] -- An old dir already exist I'm deleting old files inside it!"
   rm -rf ${HOME_MEDSLIK}/*
 fi
 mkdir -p ${HOME_MEDSLIK}
 
-# Create a copy of medslik folder and parse JSON file
-cp -r $BASE_MEDSLIK_HOME ${HOME_MEDSLIK}/
-./jsonToInput.sh ${subm_string}
-cd $HOME_MEDSLIK
-cp ${MEDSLIK}/oilsp_vs_uncert.sh .
-ls
-echo "[$APPNAME] -- $OPTARG"
-
-# Invoke oilspill_vs_uncert.sh
-./oilsp_vs_uncert.sh $queryID > select.out 2>select.err
-excode=$?
-echo -e "[$APPNAME] -- srun EXIT CODE: $excode"
-
-# Check the exit code of oilspill_vs_uncert
-if [ $excode -ne 0 ]; then
-
-    # job cancelled
-    if [ $excode -eq 15 ]; then
-        message=$(echo -e "[$APPNAME] -- `date`\tERROR\tJob has been cancelled")
-        end_time=`date +'%F %T'`
-        echo -e $message
-	if [[ $test == 0 ]] ; then
-            send_to_callback ${excode} ${callback_url}
-	fi
-        exit 7
-
-    # errors in algorithm execution
-    elif [ $excode -gt 50 ];then
-        excode=51
-	message=$(echo -e "[$APPNAME] -- `date`\tERROR\t `cat medslik_II.error`")
-        end_time=`date +'%F %T'`
-        echo -e $message
-	if [[ $test == 0 ]] ; then	   
-            send_to_callback ${excode} ${callback_url}
-	fi
-        exit $excode
-    elif [ $excode -gt 40 ];then
-	excode=41
-	message=$(echo -e "[$APPNAME] -- `date`\tERROR\t `cat medslik_II.error`")
-        end_time=`date +'%F %T'`
-        echo -e $message
-	if [[ $test == 0 ]] ; then
-            send_to_callback ${excode} ${callback_url}
-	fi
-        exit $excode
-    elif [ $excode -gt 30 ];then
-	excode=31
-	message=$(echo -e "[$APPNAME] -- `date`\tERROR\t `cat medslik_II.error`")
-        end_time=`date +'%F %T'`
-        echo -e $message
-	if [[ $test == 0 ]] ; then
-            send_to_callback ${excode} ${callback_url}
-	fi
-        exit $excode
-    elif [ $excode -gt 20 ];then
-	excode=21
-	message=$(echo -e "[$APPNAME] -- `date`\tERROR\t `cat medslik_II.error`")
-        end_time=`date +'%F %T'`
-        echo -e $message
-	if [[ $test == 0 ]] ; then	   
-            send_to_callback ${excode} ${callback_url}
-	fi
-        exit $excode
-    else
-        message=$(echo -e "[$APPNAME] -- `date`\tERROR\tError in algorithm execution")
-        end_time=`date +'%F %T'`
-        echo -e $message
-	if [[ $test == 0 ]] ; then	   
-            send_to_callback ${excode} ${callback_url}
-	fi
-        exit 6
-    fi
+# Read the model requested by the simulation
+MODEL=$(echo $subm_string | grep -e "model=[a-zA-Z]*" -o | cut -d "=" -f 2)
+if [ $MODEL == "SANIFS" ]; then
+    export BASE_MEDSLIK_HOME=$BASE_MEDSLIK_HOME_SANIFS
+    export BASE_MEDSLIK_DATA=$BASE_MEDSLIK_DATA_SANIFS
+elif [ $MODEL == "MED" ]; then
+    export BASE_MEDSLIK_HOME=$BASE_MEDSLIK_HOME_MED
+    export BASE_MEDSLIK_DATA=$BASE_MEDSLIK_DATA_MED
+    ln -s $BASE_MEDSLIK_DATA_MED $HOME_MEDSLIK/witoil/DATA
+else
+    echo "[$APPNAME] -- Model $MODEL not supported! Exiting..."
+    exit
 fi
+
+# Create a copy of medslik folder and create its configuration file
+echo "[$APPNAME] -- Requested a simulation with model $MODEL"
+cp -r $BASE_MEDSLIK_HOME ${HOME_MEDSLIK}/witoil
+echo "MEDSLIK_BASEDIR=$HOME_MEDSLIK/witoil" > $HOME_MEDSLIK/witoil/EXE/mdk2.conf
+echo "MEDSLIK_DATA=\${MEDSLIK_BASEDIR}/DATA" >> $HOME_MEDSLIK/witoil/EXE/mdk2.conf
+echo "MEDSLIK_EXE=\${MEDSLIK_BASEDIR}/EXE" >> $HOME_MEDSLIK/witoil/EXE/mdk2.conf
+
+# Create a directory for data and link .nc files in it
+mkdir $HOME_MEDSLIK/witoil/DATA/fcst_data/SK1 -p
+mkdir $HOME_MEDSLIK/witoil/DATA/fcst_data/H3k
+
+for NCFILE in $(ls $BASE_MEDSLIK_DATA/fcst_data/H3k/*.nc) ; do
+    ln -s $NCFILE $HOME_MEDSLIK/witoil/DATA/fcst_data/H3k/
+done
+
+for NCFILE in $BASE_MEDSLIK_DATA/fcst_data/SK1/*.nc ; do
+    ln -s $NCFILE $HOME_MEDSLIK/witoil/DATA/fcst_data/SK1/
+done
+
+# Invoking jsonToInput to parse the input
+echo "[$APPNAME] -- Invoking jsonToInput.sh..."
+./jsonToInput.sh ${subm_string}
+
+cd $HOME_MEDSLIK
+echo "[$APPNAME] -- \$OPTARG value is: $OPTARG"
+
+# Start the simulation
+echo "[$APPNAME] -- Starting the simulation..."
+cd $HOME_MEDSLIK/witoil/EXE
+sh run_crop_bsub.sh mdk$queryID
+
+
+
+
 
 # Preparing for the callback...
-OutputDir=${MEDSLIK}/output/json
+echo "[$APPNAME] -- Creating output directory"
+OutputDir=${MEDSLIK}/EXE/output/json
+mkdir $OutputDir
 cd $OutputDir
-cp ${MEDSLIK}/infile.txt ${Id_Dir}/
+cp ${MEDSLIK}/EXE/infile.txt ${Id_Dir}/
 cp $Id_Dir/*.json .
 
-# Create a single json file for all the output files
-touch $Id_Dir/index.html
-chmod 754 $Id_Dir/index.html
-zip -j ${Id_Dir}.zip ${Id_Dir}/*
-mv ${Id_Dir}.zip ${Id_Dir}/
 
+# copying files somewhere
 if [[ $test == 0 ]] ; then
     scp -r $Id_Dir ${userName}@193.204.199.175:/var/www/html/${userName}/
-fi
-    
-if [ $? -ne 0 ]; then
+    if [ $? -ne 0 ]; then
         message=$(echo -e "[$APPNAME] -- `date`\tERROR\tError in sending the tiles")
         end_time=`date +'%F %T'`
         echo -e $message
@@ -274,8 +248,14 @@ if [ $? -ne 0 ]; then
 	    send_to_callback -3 ${callback_url}
 	fi
         exit 8
+    fi
 fi
-echo -e "{\n\t\"files\": [">result.json; for i in $(ls scorners.json); do echo -e "\t\t{ \"name\": \"$i\"," >> result.json; echo -e "\t\t $(cat $i)" >> result.json; echo -e "\t\t},\n" >> result.json;  echo $i; done; for i in $(ls palette.json); do echo -e "\t\t{ \"name\": \"$i\"," >> result.json; echo -e "\t\t $(cat $i)" >> result.json; echo -e "\t\t},\n" >> result.json;  echo $i; done; for i in $(ls out*|grep -v srf); do echo -e "\t\t{ \"name\": \"$i\"," >> result.json; echo -e "\t\t\"output\": \"$(cat $i)\"" >> result.json; echo -e "\t\t},\n" >> result.json;  echo $i; done; for i in $(ls medslik.fte); do echo -e "\t\t{ \"name\": \"$i\"," >> result.json; echo -e "\t\t\"output\": \"$(cat $i)\"" >> result.json; echo -e "\t\t}\n" >> result.json;  echo $i; done;   echo -e "\t]\n}" >> result.json;
+
+# generate JSON output
+echo -e "{\n\t\"files\": [">result.json;
+for i in $(ls out*|grep -v srf); do echo -e "\t\t{ \"name\": \"$i\"," >> result.json; echo -e "\t\t\"output\": \"$(cat $i)\"" >> result.json; echo -e "\t\t},\n" >> result.json;  echo $i; done;
+for i in $(ls medslik.fte); do echo -e "\t\t{ \"name\": \"$i\"," >> result.json; echo -e "\t\t\"output\": \"$(cat $i)\"" >> result.json; echo -e "\t\t}\n" >> result.json;  echo $i; done;
+echo -e "\t]\n}" >> result.json;
 
 # invoking send_files_to_callback
 send_files_to_callback $OutputDir $queryID ${callback_url}
@@ -292,3 +272,6 @@ fi
 # exit gracefully
 echo "[$APPNAME] -- Elaboration completed!"
 exit 0
+
+
+
