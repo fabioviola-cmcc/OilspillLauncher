@@ -105,10 +105,8 @@ userName=`whoami`
 # set test to 0 to run out of a test environment
 test=1
 
-#log="/users/home/tessa_gpfs1/${userName}/laucher.out"
-#err="/users/home/tessa_gpfs1/${userName}/launcher.err"
-
 # parse command line arguments
+echo "[$APPNAME] -- Parsing command line arguments"
 while getopts  "i:s:c:" flag
 do
   case "$flag" in
@@ -126,6 +124,7 @@ do
 done
 
 # Parse submission string.. Values can contain also :., and -
+echo "[$APPNAME] -- Parsing submission string"
 subm_string=$(echo "${subm_string}" | sed 's/[^A-Za-z0-9_:.,;=\^§-]//g')
 
 # Check if callback url is valid
@@ -133,9 +132,6 @@ if [ "$callback_url" == "" ]; then
         message=$(echo -e "[$APPNAME] -- `date`\tERROR\tError in retrieving callback URL")
         end_time=`date +'%F %T'`
         echo -e $message
-	if [[ $test == 0 ]] ; then
-            mysql -u root -D dss_job -f -e "insert into job (query_id, dss_name, start_time,end_time,status,exit_code, launcher_err) values (-1, '${userName}', '${start_time}', '${end_time}', 'failed', -1, '${message}')"
-	fi
         exit 1
 fi
 
@@ -145,7 +141,6 @@ if [ "$queryID" == "" ]; then
         end_time=`date +'%F %T'`
         echo -e $message
 	if [[ $test == 0 ]] ; then	    
-            mysql -u root -D dss_job -f -e "insert into job (query_id, dss_name, start_time,end_time,status,exit_code, launcher_err) values (-1, '${userName}', '${start_time}', '${end_time}', 'failed', -1, '${message}')"
 	    send_to_callback -1 ${callback_url}
 	fi
         exit 2
@@ -157,15 +152,9 @@ if [ "$subm_string" == "" ]; then
         end_time=`date +'%F %T'`
         echo -e $message
 	if [[ $test == 0 ]] ; then
-            mysql -u root -D dss_job -f -e "insert into job (query_id, dss_name, start_time,end_time,status,exit_code, launcher_err) values (${queryID}, '${userName}', '${start_time}', '${end_time}', 'failed', -1, '${message}')"
 	    send_to_callback -1 ${callback_url}
 	fi
         exit 3
-fi
-
-# Insert the entry into the dss and retrieve the id
-if [[ $test == 0 ]] ; then
-    db_dss_id=`mysql -u root -D dss_job --skip-column-names -f -e "insert into job (query_id, dss_name, start_time,status) values (${queryID}, '${userName}', '${start_time}', 'running');select last_insert_id();"`
 fi
 
 # Set work variables
@@ -176,9 +165,11 @@ export NCARG_USRRESFILE=$HOME_MEDSLIK/.hluresfile
 export BASE_MEDSLIK_HOME=/work/opa/${userName}/witoil
 
 # Load modules
+echo "[$APPNAME] -- Loading modules"
 module load intel19.5/19.5.281 intel19.5/szip/2.1.1 intel19.5/hdf5/1.10.5 intel19.5/netcdf/C_4.7.2-F_4.5.2_CXX_4.3.1
 
 # Clean medslik home before starting
+echo "[$APPNAME] -- Looking for $HOME_MEDSLIK"
 if [ -d  $HOME_MEDSLIK ];then
   echo "[$APPNAME] -- An old dir already exist I'm deleting old files inside it!"
   rm -rf ${HOME_MEDSLIK}/*
@@ -207,7 +198,6 @@ if [ $excode -ne 0 ]; then
         end_time=`date +'%F %T'`
         echo -e $message
 	if [[ $test == 0 ]] ; then
-            mysql -u root -D dss_job -f -e "update job set end_time='${end_time}', status='cancelled', exit_code=$excode, launcher_err='${message}', algo_err='${message}' where id=${db_dss_id}"
             send_to_callback ${excode} ${callback_url}
 	fi
         exit 7
@@ -219,7 +209,6 @@ if [ $excode -ne 0 ]; then
         end_time=`date +'%F %T'`
         echo -e $message
 	if [[ $test == 0 ]] ; then	   
-            mysql -u root -D dss_job -f -e "update job set end_time='${end_time}', status='failed', exit_code=$excode, launcher_err='${message}', algo_err='${message}' where id=${db_dss_id}"
             send_to_callback ${excode} ${callback_url}
 	fi
         exit $excode
@@ -229,7 +218,6 @@ if [ $excode -ne 0 ]; then
         end_time=`date +'%F %T'`
         echo -e $message
 	if [[ $test == 0 ]] ; then
-            mysql -u root -D dss_job -f -e "update job set end_time='${end_time}', status='failed', exit_code=$excode, launcher_err='${message}', algo_err='${message}' where id=${db_dss_id}"
             send_to_callback ${excode} ${callback_url}
 	fi
         exit $excode
@@ -239,7 +227,6 @@ if [ $excode -ne 0 ]; then
         end_time=`date +'%F %T'`
         echo -e $message
 	if [[ $test == 0 ]] ; then
-            mysql -u root -D dss_job -f -e "update job set end_time='${end_time}', status='failed', exit_code=$excode, launcher_err='${message}', algo_err='${message}' where id=${db_dss_id}"
             send_to_callback ${excode} ${callback_url}
 	fi
         exit $excode
@@ -249,7 +236,6 @@ if [ $excode -ne 0 ]; then
         end_time=`date +'%F %T'`
         echo -e $message
 	if [[ $test == 0 ]] ; then	   
-            mysql -u root -D dss_job -f -e "update job set end_time='${end_time}', status='failed', exit_code=$excode, launcher_err='${message}', algo_err='${message}' where id=${db_dss_id}"
             send_to_callback ${excode} ${callback_url}
 	fi
         exit $excode
@@ -258,7 +244,6 @@ if [ $excode -ne 0 ]; then
         end_time=`date +'%F %T'`
         echo -e $message
 	if [[ $test == 0 ]] ; then	   
-            mysql -u root -D dss_job -f -e "update job set end_time='${end_time}', status='failed', exit_code=$excode, launcher_err='${message}', algo_err='${message}' where id=${db_dss_id}"
             send_to_callback ${excode} ${callback_url}
 	fi
         exit 6
@@ -286,7 +271,6 @@ if [ $? -ne 0 ]; then
         end_time=`date +'%F %T'`
         echo -e $message
 	if [[ $test == 0 ]] ; then
-            mysql -u root -D dss_job -f -e "update job set end_time='${end_time}', status='failed', exit_code=-3, launcher_err='${message}' where id=${db_dss_id}"
 	    send_to_callback -3 ${callback_url}
 	fi
         exit 8
@@ -300,16 +284,11 @@ if [ $? -ne 0 ]; then
 	end_time=`date +'%F %T'`
         echo -e $message
 	if [[ $test == 0 ]] ; then	   
-	    mysql -u root -D dss_job -f -e "update job set end_time='${end_time}', status='failed', exit_code=-3, launcher_err='${message}' where id=${db_dss_id}"
 	    send_to_callback -3 ${callback_url}
 	fi
         exit 7
 fi
 
-# update mysql entry and exit succesfully
-end_time=`date +'%F %T'`
-if [[ $test == 0 ]] ; then
-    mysql -u root -D dss_job -f -e "update job set end_time='${end_time}', status='success', exit_code=0 where id=${db_dss_id}"
-fi
+# exit gracefully
 echo "[$APPNAME] -- Elaboration completed!"
 exit 0
