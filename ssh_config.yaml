@@ -1,0 +1,8 @@
+witoil-dev:
+  host: '192.168.118.150'
+  user: 'dss'
+  ssh_key_filepath: '/users_home/opa/witoil-dev/.ssh/id_rsa'
+  remote_path: '/DSS/DEV/WITOIL/'
+  local_file_directory: '/work/opa/witoil-dev/OILSPILL_DA/out/'
+  host_key_file: '/users_home/opa/witoil-dev/.ssh/known_hosts'
+  file_type: [ spill_properties.nc, conf.ini ]

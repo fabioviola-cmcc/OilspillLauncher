@@ -55,43 +55,6 @@ function send_to_callback {
 
 ####################################################
 #
-# send_files_to_callback
-#
-####################################################
-
-function send_files_to_callback {
-        f_OutputDir=$1
-        f_queryID=$2
-        f_callback=$3
-	if [[ $test == 0 ]] ; then
-            curl -F "outcode=0" -F "data1=@$f_OutputDir/result.json;type=text/csv" ${f_callback}
-	fi
-        ret_value=$?
-        if [ $ret_value -eq 6 ]; then
-                #DNS error
-                counter=1
-                while [ $counter -lt 4 ]; do
-                        sleep 2
-                        echo -e "[$APPNAME] -- `date`\tERROR\tDNS error; attempt #${counter}" 1>&2
-			if [[ $test == 0 ]] ; then			   
-        		    curl -F "outcode=0" -F "data1=@$f_OutputDir/result.json;type=text/csv" ${f_callback}
-			fi
-                        ret_value=$?
-                        if [ $ret_value -ne 6 ]; then
-                                break;
-                        fi
-                        let counter=counter+1
-                done
-                if [ $counter -eq 4 ]; then
-                        echo -e "[$APPNAME] -- `date`\tERROR\tDNS error; unable to contact ${f_callback}" 1>&2
-                fi
-        fi
-        return $ret_value
-}
-
-
-####################################################
-#
 # main
 #
 ####################################################
@@ -224,54 +187,52 @@ echo "[$APPNAME] -- Starting the simulation..."
 cd $HOME_MEDSLIK/witoil/EXE
 sh run_crop_bsub.sh mdk$queryID
 
+# Copying output file spill_properties.nc
+cp $HOME_MEDSLIK/witoil/output/final/spill_properties.nc $HOME_MEDSLIK
 
+# Get the information required to build conf.ini file
+LON_MIN=$(cat $HOME_MEDSIK/witoil/output/final/medslik.tmp | grep Longitudes | tr -s " " | cut -f 2 -d " ")
+LON_MAX=$(cat $HOME_MEDSIK/witoil/output/final/medslik.tmp | grep Longitudes | tr -s " " | cut -f 3 -d " ")
+LAT_MIN=$(cat $HOME_MEDSIK/witoil/output/final/medslik.tmp | grep Latitudes | tr -s " " | cut -f 2 -d " ")
+LAT_MAX=$(cat $HOME_MEDSIK/witoil/output/final/medslik.tmp | grep Latitudes | tr -s " " | cut -f 3 -d " ")
+DURATION=$(cat $HOME_MEDSLIK/witoil/output/final/medslik_inputfile.txt | grep -e "length=[0-9]\{4\}" -o | cut -d "=" -f 2)
+MODEL=$(echo $subm_string | grep -e "model=[a-zA-Z]*" -o | cut -f 2 -d "=")
+DAY=$(grep Date medslik5.inp | tr -s " " | cut -d " " -f 1)
+MONTH=$(grep Date medslik5.inp | tr -s " " | cut -d " " -f 2)
+YEAR=$(grep Date medslik5.inp | tr -s " " | cut -d " " -f 3)
+HOUR=$(grep "Hour of Spill" medslik5.inp | tr -s " " | cut -f 1 -d " ")
+PROD_DATE="$YEAR/$MONTH/$DATE"
+START_DATETIME="$YEAR/$MONTH/$DAY ${HOUR:0:2}:00"
 
+# Generating output file conf.ini
+echo "###Configuration File" > $HOME_MEDSLIK/conf.ini
+echo "[GENERAL]" >> $HOME_MEDSLIK/conf.ini
+echo "dss=witoil" >> $HOME_MEDSLIK/conf.ini
+echo "user=witoil-dev" >> $HOME_MEDSLIK/conf.ini
+echo "host=$(hostname)" >> $HOME_MEDSLIK/conf.ini
+echo "model=$MODEL" >> $HOME_MEDSLIK/conf.ini
+echo "production_date=$PROD_DATE" >> $HOME_MEDSLIK/conf.ini
+echo "start_date_time=$START_DATETIME" >> $HOME_MEDSLIK/conf.ini
+echo "duration=$DURATION" >> $HOME_MEDSLIK/conf.ini
+echo "" >> $HOME_MEDSLIK/conf.ini
+echo "[WITOIL_BOUNDING_BOX] # mandatory for WITOIL" >> $HOME_MEDSLIK/conf.ini
+echo "bbox_lat_min=$LAT_MIN" >> $HOME_MEDSLIK/conf.ini
+echo "bbox_lon_min=$LON_MIN" >> $HOME_MEDSLIK/conf.ini
+echo "bbox_lat_max=$LAT_MAX" >> $HOME_MEDSLIK/conf.ini
+echo "bbox_lon_max=$LON_MAX" >> $HOME_MEDSLIK/conf.ini
 
-
-# Preparing for the callback...
-echo "[$APPNAME] -- Creating output directory"
-OutputDir=${MEDSLIK}/EXE/output/json
-mkdir $OutputDir
-cd $OutputDir
-cp ${MEDSLIK}/EXE/infile.txt ${Id_Dir}/
-cp $Id_Dir/*.json .
-
-
-# copying files somewhere
+# finalize
 if [[ $test == 0 ]] ; then
-    scp -r $Id_Dir ${userName}@193.204.199.175:/var/www/html/${userName}/
-    if [ $? -ne 0 ]; then
-        message=$(echo -e "[$APPNAME] -- `date`\tERROR\tError in sending the tiles")
-        end_time=`date +'%F %T'`
-        echo -e $message
-	if [[ $test == 0 ]] ; then
-	    send_to_callback -3 ${callback_url}
-	fi
-        exit 8
-    fi
+    # invoke the finalize script to send files
+    python finalize.py -s $queryID
+    
+    # contact the callback url
+    send_to_callback 0 $callback_url
 fi
 
-# generate JSON output
-echo -e "{\n\t\"files\": [">result.json;
-for i in $(ls out*|grep -v srf); do echo -e "\t\t{ \"name\": \"$i\"," >> result.json; echo -e "\t\t\"output\": \"$(cat $i)\"" >> result.json; echo -e "\t\t},\n" >> result.json;  echo $i; done;
-for i in $(ls medslik.fte); do echo -e "\t\t{ \"name\": \"$i\"," >> result.json; echo -e "\t\t\"output\": \"$(cat $i)\"" >> result.json; echo -e "\t\t}\n" >> result.json;  echo $i; done;
-echo -e "\t]\n}" >> result.json;
-
-# invoking send_files_to_callback
-send_files_to_callback $OutputDir $queryID ${callback_url}
-if [ $? -ne 0 ]; then
-        message=$(echo -e "[$APPNAME] -- `date`\tERROR\tError in sending the output files")
-	end_time=`date +'%F %T'`
-        echo -e $message
-	if [[ $test == 0 ]] ; then	   
-	    send_to_callback -3 ${callback_url}
-	fi
-        exit 7
-fi
+# clean
+rm -rf $HOME_MEDSLIK/witoil
 
 # exit gracefully
 echo "[$APPNAME] -- Elaboration completed!"
 exit 0
-
-
-
