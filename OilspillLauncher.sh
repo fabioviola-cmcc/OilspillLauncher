@@ -125,8 +125,8 @@ export Id_Dir=$queryID
 export HOME_MEDSLIK=/work/opa/${userName}/OILSPILL_DA/out/${Id_Dir}
 export MEDSLIK=$HOME_MEDSLIK/witoil
 export NCARG_USRRESFILE=$HOME_MEDSLIK/.hluresfile
-export BASE_MEDSLIK_HOME_SANIFS=/work/opa/${userName}/witoil-sanifs
-export BASE_MEDSLIK_HOME_MED=/work/opa/${userName}/witoil-med
+export BASE_MEDSLIK_HOME_SANIFS=/users_home/opa/${userName}/witoil-sanifs
+export BASE_MEDSLIK_HOME_MED=/users_home/opa/${userName}/witoil-med
 export BASE_MEDSLIK_DATA_SANIFS=/work/opa/witoil-dev/witoil-sanifs-DATA
 export BASE_MEDSLIK_DATA_MED=/work/opa/witoil-dev/witoil-med-DATA
 
@@ -188,14 +188,16 @@ cd $HOME_MEDSLIK/witoil/EXE
 sh run_crop_bsub.sh mdk$queryID
 
 # Copying output file spill_properties.nc
-cp $HOME_MEDSLIK/witoil/output/final/spill_properties.nc $HOME_MEDSLIK
+echo "[$APPNAME] -- Copying spill_properties.nc"
+cp $HOME_MEDSLIK/witoil/EXE/output/final/spill_properties.nc $HOME_MEDSLIK
 
 # Get the information required to build conf.ini file
-LON_MIN=$(cat $HOME_MEDSIK/witoil/output/final/medslik.tmp | grep Longitudes | tr -s " " | cut -f 2 -d " ")
-LON_MAX=$(cat $HOME_MEDSIK/witoil/output/final/medslik.tmp | grep Longitudes | tr -s " " | cut -f 3 -d " ")
-LAT_MIN=$(cat $HOME_MEDSIK/witoil/output/final/medslik.tmp | grep Latitudes | tr -s " " | cut -f 2 -d " ")
-LAT_MAX=$(cat $HOME_MEDSIK/witoil/output/final/medslik.tmp | grep Latitudes | tr -s " " | cut -f 3 -d " ")
-DURATION=$(cat $HOME_MEDSLIK/witoil/output/final/medslik_inputfile.txt | grep -e "length=[0-9]\{4\}" -o | cut -d "=" -f 2)
+echo "[$APPNAME] -- Generating conf.ini"
+LON_MIN=$(cat $HOME_MEDSIK/witoil/EXE/output/final/medslik.tmp | grep Longitudes | tr -s " " | cut -f 2 -d " ")
+LON_MAX=$(cat $HOME_MEDSIK/witoil/EXE/output/final/medslik.tmp | grep Longitudes | tr -s " " | cut -f 3 -d " ")
+LAT_MIN=$(cat $HOME_MEDSIK/witoil/EXE/output/final/medslik.tmp | grep Latitudes | tr -s " " | cut -f 2 -d " ")
+LAT_MAX=$(cat $HOME_MEDSIK/witoil/EXE/output/final/medslik.tmp | grep Latitudes | tr -s " " | cut -f 3 -d " ")
+DURATION=$(cat $HOME_MEDSLIK/witoil/EXE/output/final/medslik_inputfile.txt | grep -e "length=[0-9]\{4\}" -o | cut -d "=" -f 2)
 MODEL=$(echo $subm_string | grep -e "model=[a-zA-Z]*" -o | cut -f 2 -d "=")
 DAY=$(grep Date medslik5.inp | tr -s " " | cut -d " " -f 1)
 MONTH=$(grep Date medslik5.inp | tr -s " " | cut -d " " -f 2)
